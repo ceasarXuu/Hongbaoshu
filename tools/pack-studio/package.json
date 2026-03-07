@@ -1,0 +1,14 @@
+{
+  "name": "pack-studio",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local web service for building Hongbaoshu book packs.",
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "yazl": "^3.3.1"
+  }
+}

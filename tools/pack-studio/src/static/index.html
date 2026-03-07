@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pack Studio</title>
+    <style>
+      :root {
+        --bg: #f1ede2;
+        --panel: #fffaf0;
+        --ink: #1f1c18;
+        --accent: #875b2f;
+        --line: #d8c7a9;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "Segoe UI", "PingFang SC", sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at top left, rgba(135, 91, 47, 0.12), transparent 30%),
+          linear-gradient(180deg, #f7f1e4 0%, var(--bg) 100%);
+      }
+      main {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 24px;
+        display: grid;
+        grid-template-columns: 320px 1fr;
+        gap: 20px;
+      }
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: 18px;
+        box-shadow: 0 14px 40px rgba(80, 56, 30, 0.08);
+      }
+      input, textarea, button {
+        width: 100%;
+        margin: 8px 0 12px;
+        padding: 10px 12px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #fffdf8;
+      }
+      textarea { min-height: 220px; resize: vertical; }
+      button { border: none; cursor: pointer; background: var(--accent); color: #fff; }
+      button.secondary { background: #d4be98; color: #2d2217; }
+      .project-list button { text-align: left; }
+      .muted { color: #6f6251; font-size: 13px; }
+      .actions, .two-col {
+        display: grid;
+        gap: 12px;
+      }
+      .actions { grid-template-columns: repeat(4, 1fr); }
+      .two-col { grid-template-columns: 1fr 1fr; }
+      pre {
+        white-space: pre-wrap;
+        word-break: break-word;
+        background: #fbf6ec;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 12px;
+        min-height: 180px;
+      }
+      @media (max-width: 960px) {
+        main, .two-col { grid-template-columns: 1fr; }
+        .actions { grid-template-columns: 1fr 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="panel">
+        <h1>Pack Studio</h1>
+        <p class="muted">最小闭环：txt 导入、标准化、CSV、校验、打包。</p>
+        <label>项目名称</label>
+        <input id="new-project-name" placeholder="例如：mao-quotes" />
+        <button id="create-project">创建项目</button>
+        <hr />
+        <h2>项目列表</h2>
+        <div id="project-list" class="project-list"></div>
+      </section>
+
+      <section class="panel">
+        <h2 id="project-title">未选择项目</h2>
+        <p class="muted" id="project-meta">先创建或选择一个项目。</p>
+        <div class="two-col">
+          <div>
+            <label>packId</label>
+            <input id="pack-id" />
+          </div>
+          <div>
+            <label>packVersion</label>
+            <input id="pack-version" type="number" value="1" />
+          </div>
+        </div>
+        <div class="two-col">
+          <div>
+            <label>书名</label>
+            <input id="book-title" />
+          </div>
+          <div>
+            <label>作者</label>
+            <input id="book-author" />
+          </div>
+        </div>
+        <div class="two-col">
+          <div>
+            <label>版本</label>
+            <input id="book-edition" value="1.0" />
+          </div>
+          <div>
+            <label>导入 txt 文件</label>
+            <input id="file-input" type="file" accept=".txt,text/plain" />
+          </div>
+        </div>
+        <label>narration 目录路径</label>
+        <input id="narration-dir" placeholder="例如：D:\\audio\\narration" />
+        <label>文本内容</label>
+        <textarea id="source-text" placeholder="粘贴 txt 内容，或通过上方文件选择器导入。"></textarea>
+        <div class="actions">
+          <button id="import-text">保存文本</button>
+          <button id="normalize" class="secondary">标准化</button>
+          <button id="export-csv" class="secondary">导出 CSV</button>
+          <button id="validate" class="secondary">校验</button>
+        </div>
+        <div class="actions" style="margin-top: 12px;">
+          <button id="import-narration" class="secondary">导入音频目录</button>
+          <button id="build">打包</button>
+          <button id="download-artifact" class="secondary">下载产物</button>
+        </div>
+        <h3>运行结果</h3>
+        <pre id="output"></pre>
+      </section>
+    </main>
+
+    <script>
+      const state = { projects: [], selectedProjectId: null };
+      const $ = (id) => document.getElementById(id);
+
+      function output(value) {
+        $("output").textContent = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+      }
+
+      async function request(url, options = {}) {
+        const response = await fetch(url, {
+          headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+          ...options,
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data.error || "Request failed");
+        }
+        return data;
+      }
+
+      async function refreshProjects() {
+        state.projects = await request("/api/projects");
+        $("project-list").innerHTML = "";
+        for (const project of state.projects) {
+          const button = document.createElement("button");
+          button.className = "secondary";
+          button.textContent = `${project.name} [${project.status}]`;
+          button.onclick = () => selectProject(project.id);
+          $("project-list").appendChild(button);
+        }
+      }
+
+      async function selectProject(projectId) {
+        const payload = await request(`/api/projects/${projectId}`);
+        state.selectedProjectId = projectId;
+        $("project-title").textContent = payload.project.name;
+        $("project-meta").textContent = `状态：${payload.project.status} | sourceType：${payload.project.sourceType}`;
+        $("pack-id").value = payload.project.metadata.packId || "";
+        $("pack-version").value = payload.project.metadata.packVersion || 1;
+        $("book-title").value = payload.project.metadata.title || "";
+        $("book-author").value = payload.project.metadata.author || "";
+        $("book-edition").value = payload.project.metadata.edition || "";
+        output(payload);
+      }
+
+      function metadata() {
+        return {
+          packId: $("pack-id").value.trim(),
+          packVersion: Number($("pack-version").value || 1),
+          formatVersion: 1,
+          title: $("book-title").value.trim(),
+          author: $("book-author").value.trim(),
+          edition: $("book-edition").value.trim(),
+        };
+      }
+
+      $("create-project").onclick = async () => {
+        const project = await request("/api/projects", {
+          method: "POST",
+          body: JSON.stringify({ name: $("new-project-name").value.trim() }),
+        });
+        await refreshProjects();
+        await selectProject(project.id);
+      };
+
+      $("import-text").onclick = async () => {
+        if (!state.selectedProjectId) return output("请先选择项目。");
+        const result = await request(`/api/projects/${state.selectedProjectId}/import-text`, {
+          method: "POST",
+          body: JSON.stringify({ metadata: metadata(), text: $("source-text").value }),
+        });
+        await refreshProjects();
+        await selectProject(state.selectedProjectId);
+        output(result);
+      };
+
+      $("normalize").onclick = async () => {
+        if (!state.selectedProjectId) return output("请先选择项目。");
+        const result = await request(`/api/projects/${state.selectedProjectId}/normalize`, { method: "POST" });
+        await refreshProjects();
+        await selectProject(state.selectedProjectId);
+        output(result);
+      };
+
+      $("export-csv").onclick = async () => {
+        if (!state.selectedProjectId) return output("请先选择项目。");
+        const result = await request(`/api/projects/${state.selectedProjectId}/export-sentences`, { method: "POST" });
+        await selectProject(state.selectedProjectId);
+        output(result);
+      };
+
+      $("validate").onclick = async () => {
+        if (!state.selectedProjectId) return output("请先选择项目。");
+        const result = await request(`/api/projects/${state.selectedProjectId}/validate`, { method: "POST" });
+        await refreshProjects();
+        await selectProject(state.selectedProjectId);
+        output(result);
+      };
+
+      $("build").onclick = async () => {
+        if (!state.selectedProjectId) return output("请先选择项目。");
+        const result = await request(`/api/projects/${state.selectedProjectId}/build`, { method: "POST" });
+        await refreshProjects();
+        await selectProject(state.selectedProjectId);
+        output(result);
+      };
+
+      $("import-narration").onclick = async () => {
+        if (!state.selectedProjectId) return output("请先选择项目。");
+        const result = await request(`/api/projects/${state.selectedProjectId}/import-narration`, {
+          method: "POST",
+          body: JSON.stringify({ sourceDir: $("narration-dir").value.trim() }),
+        });
+        await selectProject(state.selectedProjectId);
+        output(result);
+      };
+
+      $("download-artifact").onclick = () => {
+        if (!state.selectedProjectId) return output("请先选择项目。");
+        window.open(`/api/projects/${state.selectedProjectId}/artifact`, "_blank");
+      };
+
+      $("file-input").onchange = async (event) => {
+        const file = event.target.files?.[0];
+        if (file) {
+          $("source-text").value = await file.text();
+        }
+      };
+
+      refreshProjects().catch((error) => output(error.message));
+    </script>
+  </body>
+</html>

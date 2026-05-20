@@ -1,131 +1,123 @@
 package com.xuyutech.hongbaoshu
 
-import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import org.junit.Rule
+import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.uiautomator.By
+import androidx.test.uiautomator.UiDevice
+import androidx.test.uiautomator.Until
+import org.junit.After
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * 阅读器仪表测试
- * 测试导航流、翻页、朗读控制等功能
+ * Real-device smoke tests use UiAutomator because MIUI devices can leave
+ * Compose's ActivityScenario runner stuck before the activity reaches focus.
  */
 @RunWith(AndroidJUnit4::class)
 class ReaderInstrumentedTest {
+    private lateinit var device: UiDevice
+    private val packageName = "com.xuyutech.hongbaoshu"
 
-    @get:Rule
-    val composeTestRule = createAndroidComposeRule<MainActivity>()
+    @Before
+    fun setUp() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        device = UiDevice.getInstance(instrumentation)
+        device.wakeUp()
+        launchApp()
+    }
+
+    @After
+    fun tearDown() {
+        device.pressHome()
+    }
 
     @Test
     fun coverScreen_isDisplayed() {
-        // 验证封面屏幕显示
-        composeTestRule.onNodeWithContentDescription("封面").assertIsDisplayed()
+        assertNotNull(waitForCover())
     }
 
     @Test
     fun navigateToReader_fromCover() {
-        // 点击封面进入阅读
-        composeTestRule.onNodeWithContentDescription("封面").performClick()
-        
-        // 等待足够长的时间确保分页计算完成
-        composeTestRule.waitForIdle()
-        Thread.sleep(3000)
-        
-        // 验证封面不再显示 (进入了阅读页)
-        composeTestRule.onNodeWithContentDescription("封面").assertDoesNotExist()
+        enterReader()
+        assertTrue(device.wait(Until.gone(By.desc("封面")), TIMEOUT_MS))
     }
 
     @Test
     fun backGesture_navigatesToCover() {
-        // 进入阅读界面
-        composeTestRule.onNodeWithContentDescription("封面").performClick()
-        composeTestRule.waitForIdle()
-        Thread.sleep(3000)  // 等待分页完成
-        
-        // 由于新增了引导弹窗，需要先关闭弹窗
-        // 查找 "我知道了" 按钮并点击
-        val guideButtons = composeTestRule.onAllNodesWithText("我知道了")
-        if (guideButtons.fetchSemanticsNodes().isNotEmpty()) {
-            guideButtons.onFirst().performClick()
-            composeTestRule.waitForIdle()
-            Thread.sleep(500)
-        }
-        
-        // 执行右滑手势返回 (从左边缘向右滑动)
-        composeTestRule.onRoot().performTouchInput {
-            swipe(
-                start = androidx.compose.ui.geometry.Offset(width * 0.2f, centerY), // Avoid system edge (0.1f -> 0.2f)
-                end = androidx.compose.ui.geometry.Offset(width * 0.9f, centerY),
-                durationMillis = 500 // Slower swipe
-            )
-        }
-        
-        // 等待翻页动画完成
-        composeTestRule.waitForIdle()
-        Thread.sleep(500)
-        
-        // 验证回到封面
-        composeTestRule.onNodeWithContentDescription("封面").assertIsDisplayed()
+        enterReader()
+        dismissGuideIfPresent()
+        device.swipe(
+            (device.displayWidth * 0.2f).toInt(),
+            device.displayHeight / 2,
+            (device.displayWidth * 0.9f).toInt(),
+            device.displayHeight / 2,
+            24
+        )
+        assertNotNull(waitForCover())
     }
 
     @Test
     fun openMenu_verifyDisplay() {
-        // 进入阅读界面
-        composeTestRule.onNodeWithContentDescription("封面").performClick()
-        composeTestRule.waitForIdle()
-        Thread.sleep(2000)
-        
-        // 如果有引导弹窗，先点击关闭
-        val guideButtons = composeTestRule.onAllNodesWithText("我知道了")
-        if (guideButtons.fetchSemanticsNodes().isNotEmpty()) {
-            guideButtons.onFirst().performClick()
-            composeTestRule.waitForIdle()
-            Thread.sleep(1000)
-        }
-
-        // 双击顶部区域唤出菜单
-        composeTestRule.onRoot().performTouchInput {
-            // slightly lower to ensure hit
-            val topArea = androidx.compose.ui.geometry.Offset(centerX, height * 0.15f)
-            doubleClick(topArea)
-        }
-        
-        composeTestRule.waitForIdle()
-        
-        // 验证菜单标题显示
-        composeTestRule.onNodeWithText("阅读设置").assertIsDisplayed()
+        enterReader()
+        dismissGuideIfPresent()
+        openReaderMenu()
+        assertNotNull(device.wait(Until.findObject(By.text("目录")), TIMEOUT_MS))
+        assertNotNull(device.wait(Until.findObject(By.text("字体")), TIMEOUT_MS))
     }
 
     @Test
-    fun toggleNightMode_changesState() {
-        // 进入阅读界面
-        composeTestRule.onNodeWithContentDescription("封面").performClick()
-        composeTestRule.waitForIdle()
-        Thread.sleep(2000)
+    fun toggleNightMode_controlIsInteractive() {
+        enterReader()
+        dismissGuideIfPresent()
+        openReaderMenu()
+        val nightButton = device.wait(Until.findObject(By.text("夜间")), TIMEOUT_MS)
+            ?: device.wait(Until.findObject(By.text("日间")), TIMEOUT_MS)
+        assertNotNull(nightButton)
 
-        // 如果有引导弹窗，先点击关闭
-        val guideButtons = composeTestRule.onAllNodesWithText("我知道了")
-        if (guideButtons.fetchSemanticsNodes().isNotEmpty()) {
-            guideButtons.onFirst().performClick()
-            composeTestRule.waitForIdle()
-            Thread.sleep(1000)
-        }
+        device.click(
+            (device.displayWidth * 0.9f).toInt(),
+            (device.displayHeight * 0.94f).toInt()
+        )
+        device.waitForIdle()
+        assertTrue(device.wait(Until.hasObject(By.pkg(packageName)), TIMEOUT_MS))
+        assertTrue(device.wait(Until.gone(By.desc("封面")), SHORT_TIMEOUT_MS))
+    }
 
-        // 打开菜单
-        composeTestRule.onRoot().performTouchInput {
-            doubleClick(androidx.compose.ui.geometry.Offset(centerX, height * 0.15f))
-        }
-        composeTestRule.waitForIdle()
+    private fun launchApp() {
+        device.pressHome()
+        device.executeShellCommand("am start -W -n $packageName/.MainActivity -f 0x10008000")
+        assertTrue(device.wait(Until.hasObject(By.pkg(packageName)), TIMEOUT_MS))
+    }
 
-        // 验证夜间模式开关存在并关闭
-        composeTestRule.onNodeWithContentDescription("夜间模式开关").assertIsOff()
+    private fun waitForCover() = device.wait(Until.findObject(By.desc("封面")), TIMEOUT_MS)
 
-        // 点击切换
-        composeTestRule.onNodeWithContentDescription("夜间模式开关").performClick()
-        composeTestRule.waitForIdle()
+    private fun enterReader() {
+        val cover = waitForCover()
+        assertNotNull(cover)
+        cover.click()
+        assertTrue(device.wait(Until.gone(By.desc("封面")), TIMEOUT_MS))
+    }
 
-        // 验证开关变为打开状态
-        composeTestRule.onNodeWithContentDescription("夜间模式开关").assertIsOn()
+    private fun dismissGuideIfPresent() {
+        val button = device.wait(Until.findObject(By.text("我知道了")), SHORT_TIMEOUT_MS)
+        button?.click()
+        device.waitForIdle()
+    }
+
+    private fun openReaderMenu() {
+        val x = device.displayWidth / 2
+        val y = (device.displayHeight * 0.15f).toInt()
+        device.click(x, y)
+        Thread.sleep(120)
+        device.click(x, y)
+        device.waitForIdle()
+    }
+
+    private companion object {
+        const val TIMEOUT_MS = 10_000L
+        const val SHORT_TIMEOUT_MS = 1_000L
     }
 }

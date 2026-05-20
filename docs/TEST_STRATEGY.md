@@ -24,6 +24,13 @@
 - BGM 控制面板：播放/暂停/下一首/静音。
 - 进度恢复：重启后回到上次页/句。
 
+## 2.1 真机自动化执行要求
+- 真机冒烟测试使用 `app:connectedDebugAndroidTest`，设备必须保持解锁、亮屏、前台可启动应用。
+- Reader 主流程测试使用 UiAutomator 驱动真实系统窗口，避免部分 MIUI 真机上 Compose `ActivityScenario` 在启动 Activity 前卡住。
+- 如果测试进程被宿主超时中断，先执行 `adb shell am force-stop com.xuyutech.hongbaoshu` 和 `adb shell am force-stop com.xuyutech.hongbaoshu.test`，必要时再用 `adb shell pidof com.xuyutech.hongbaoshu` 确认无残留进程。
+- 每次真机测试前用 `adb shell dumpsys window` 确认 `screenState=SCREEN_STATE_ON` 且 `mDreamingLockscreen=false`。
+- MIUI 真机会对安装弹窗做强确认；调试循环中优先保留已安装包，先用 `adb install -r -t app/build/outputs/apk/debug/app-debug.apk` 和 `adb install -r -t app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk` 覆盖安装，再用 `adb shell am instrument -w -r com.xuyutech.hongbaoshu.test/androidx.test.runner.AndroidJUnitRunner` 直接复跑测试。只有 APK 内容变化时才重新覆盖安装，避免反复卸载重装触发授权。
+
 ## 3. 性能与体验
 - 启动时间：封面加载 <1s。
 - 翻页帧率：目标 60fps（可通过 Systrace/调试工具观察）。

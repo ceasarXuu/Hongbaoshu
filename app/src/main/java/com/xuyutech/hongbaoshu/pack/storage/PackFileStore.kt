@@ -1,6 +1,7 @@
 package com.xuyutech.hongbaoshu.pack.storage
 
 import android.content.Context
+import com.xuyutech.hongbaoshu.core.SafeFileOps
 import java.io.File
 
 data class PackInspection(
@@ -16,6 +17,8 @@ data class PackInspection(
 class PackFileStore(
     private val context: Context
 ) {
+    private val safeFileOps = SafeFileOps(File(context.filesDir, "backups/pack_files"))
+
     fun packDir(packId: String): File {
         val root = File(context.filesDir, "packs").also { it.mkdirs() }
         return File(root, packId)
@@ -31,7 +34,9 @@ class PackFileStore(
     }
 
     fun deletePack(packId: String) {
-        packDir(packId).deleteRecursively()
-        pageCacheDir(packId).deleteRecursively()
+        safeFileOps.moveToBackup(packDir(packId), "delete_pack_$packId")
+        safeFileOps.moveToBackup(pageCacheDir(packId), "delete_page_cache_$packId")
     }
+
+    fun safeFileOps(): SafeFileOps = safeFileOps
 }

@@ -1,0 +1,7 @@
+{
+  "name": "hongbaoshu-workspace",
+  "private": true,
+  "scripts": {
+    "pack_studio": "npm --prefix tools/pack-studio start"
+  }
+}

@@ -27,3 +27,5 @@ service-account.json
 /privacy
 /TODO
 /audio_backup_raw
+/tools/pack-studio/node_modules
+/tools/pack-studio/workspace

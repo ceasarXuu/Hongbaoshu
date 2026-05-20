@@ -13,6 +13,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import com.xuyutech.hongbaoshu.core.AppLogger
 import com.xuyutech.hongbaoshu.data.ContentLoader
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -151,7 +152,7 @@ class AudioManagerImpl(
                 }
             }
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                android.util.Log.e("AudioManager", "Player error: ${error.message}")
+                AppLogger.e("AudioManager", "Player error: ${error.message}")
                 val activeId = player.currentMediaItem?.mediaId
                 if (activeId != null) {
                     val recovered = tryRecoverFromPlayerError(
@@ -185,11 +186,11 @@ class AudioManagerImpl(
         try {
             // 检查播放器是否处于错误状态
             if (narrationPlayer.playerError != null) {
-                android.util.Log.w("AudioManager", "Recreating narration player due to error")
+                AppLogger.w("AudioManager", "Recreating narration player due to error")
                 resetNarrationPlayer()
             }
         } catch (e: Exception) {
-            android.util.Log.e("AudioManager", "Error checking player state: ${e.message}")
+            AppLogger.e("AudioManager", "Error checking player state: ${e.message}")
             resetNarrationPlayer()
         }
     }
@@ -277,7 +278,7 @@ class AudioManagerImpl(
             updateForegroundState()
             true
         } catch (e: Exception) {
-            android.util.Log.e("AudioManager", "Error recovering playback: ${e.message}")
+            AppLogger.e("AudioManager", "Error recovering playback: ${e.message}")
             false
         }
     }
@@ -356,7 +357,7 @@ class AudioManagerImpl(
             updateForegroundState()
             return true
         } catch (e: Exception) {
-            android.util.Log.e("AudioManager", "Error playing list: ${e.message}")
+            AppLogger.e("AudioManager", "Error playing list: ${e.message}")
             return false
         }
     }
@@ -428,7 +429,7 @@ class AudioManagerImpl(
 
     override fun updateContentLoader(loader: ContentLoader) {
         contentLoaderRef = loader
-        android.util.Log.d("AudioManagerImpl", "ContentLoader updated to: ${loader.javaClass.simpleName}")
+        AppLogger.d("AudioManagerImpl", "ContentLoader updated to: ${loader.javaClass.simpleName}")
     }
 
     private fun getContentLoader(): ContentLoader = contentLoaderRef
@@ -444,7 +445,7 @@ class AudioManagerImpl(
         try {
             narrationPlayer.setPlaybackSpeed(safeSpeed)
         } catch (e: Exception) {
-            android.util.Log.e("AudioManager", "Error setting playback speed: ${e.message}")
+            AppLogger.e("AudioManager", "Error setting playback speed: ${e.message}")
         }
         _state.update { current ->
             current.copy(narrationSpeed = safeSpeed)

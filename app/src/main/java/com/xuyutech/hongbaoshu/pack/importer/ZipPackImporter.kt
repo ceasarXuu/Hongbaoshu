@@ -2,6 +2,7 @@ package com.xuyutech.hongbaoshu.pack.importer
 
 import android.content.Context
 import android.net.Uri
+import com.xuyutech.hongbaoshu.core.SafeFileOps
 import com.xuyutech.hongbaoshu.data.BookJson
 import com.xuyutech.hongbaoshu.pack.index.PackIndexStore
 import com.xuyutech.hongbaoshu.pack.model.PackIndex
@@ -22,6 +23,7 @@ class ZipPackImporter(
     private val packFileStore: PackFileStore
 ) {
     private val json = Json { ignoreUnknownKeys = true }
+    private val safeFileOps = SafeFileOps(File(context.cacheDir, "backups/pack_import"))
 
     suspend fun import(uri: Uri): PackImportResult = withContext(Dispatchers.IO) {
         val tmpRoot = File(context.cacheDir, "pack_import").apply { mkdirs() }
@@ -124,16 +126,11 @@ class ZipPackImporter(
 
             val targetDir = packFileStore.packDir(manifest.packId)
             val stagingDir = File(targetDir.parentFile, ".staging_${manifest.packId}_${System.currentTimeMillis()}")
-            if (stagingDir.exists()) stagingDir.deleteRecursively()
+            safeFileOps.moveToBackup(stagingDir, "stale_staging_${manifest.packId}")
 
             // Move validated content into files/packs/<packId> via staging dir.
             moveDir(tmpDir, stagingDir)
-            if (targetDir.exists()) targetDir.deleteRecursively()
-            if (!stagingDir.renameTo(targetDir)) {
-                // Fallback: copy then delete
-                copyDir(stagingDir, targetDir)
-                stagingDir.deleteRecursively()
-            }
+            packFileStore.safeFileOps().atomicReplace(stagingDir, targetDir, "replace_pack_${manifest.packId}")
 
             val coverExists = manifest.resources.cover?.path?.let { File(targetDir, it).exists() } ?: File(targetDir, "images/cover.png").exists()
             val flipExists = manifest.resources.flipSound?.path?.let { File(targetDir, it).exists() } ?: File(targetDir, "sound/page_flip.wav.ogg").exists()
@@ -170,7 +167,7 @@ class ZipPackImporter(
                 errorCode = PackImportResult.ErrorCode.IO_ERROR
             )
         } finally {
-            tmpDir.deleteRecursively()
+            safeFileOps.moveToBackup(tmpDir, "import_tmp")
         }
     }
 
@@ -181,8 +178,8 @@ class ZipPackImporter(
                 var entry: ZipEntry? = zis.nextEntry
                 while (entry != null) {
                     val name = entry.name.removePrefix("/").replace("\\", "/")
-                    if (name.isNotBlank() && !name.contains("..")) {
-                        val outFile = File(destDir, name)
+                    if (name.isNotBlank()) {
+                        val outFile = safeFileOps.ensureChildPath(destDir, name)
                         if (entry.isDirectory) {
                             outFile.mkdirs()
                         } else {
@@ -217,7 +214,7 @@ class ZipPackImporter(
     private fun moveDir(src: File, dest: File) {
         if (!src.renameTo(dest)) {
             copyDir(src, dest)
-            src.deleteRecursively()
+            safeFileOps.moveToBackup(src, "move_dir_source")
         }
     }
 

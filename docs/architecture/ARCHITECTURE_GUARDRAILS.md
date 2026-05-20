@@ -36,10 +36,18 @@
 ## 文件规模
 
 - 新增单个代码文件不得超过 500 行。
-- 既有超限文件不在无关变更里继续扩大；Reader 拆分阶段必须把 `ReaderScreen` 和 `ReaderViewModel` 拆到 500 行以内。
+- 生产 Kotlin 文件必须保持在 500 行以内；`ArchitectureGuardrailsTest` 会在单元测试中拦截超限文件。
 
 ## 当前已收口边界
 
 - 入口层通过 `PackRepository` 执行导入、删除、重校验、打开记录和封面解析。
 - 直接 Android Log 调用已收口到 `AppLogger`。
 - Pack 删除、覆盖、builtin 迁移已通过 `SafeFileOps` 备份后替换。
+- Reader UI 已按视口、顶部/底部栏、面板、分页显示、正文内容拆分。
+- Reader 状态机已按分页缓存、页面导航、朗读编排拆出控制器，`ReaderViewModel` 只保留页面状态门面和持久化协调。
+
+## 执行经验
+
+- 大文件拆分先做可编译的机械迁移，再抽出控制器；每一步都跑 `app:compileDebugKotlin`，避免 UI 括号和 Compose import 问题堆叠。
+- 状态机拆分时保持 `ReaderViewModel` 的公开方法不变，先用控制器承接内部职责，降低对 `ReaderViewport` 和测试的连锁影响。
+- 架构规则必须落到测试，文档约束和 `ArchitectureGuardrailsTest` 同步更新，避免后续迭代重新放大文件。

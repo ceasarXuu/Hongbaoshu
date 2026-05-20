@@ -113,152 +113,144 @@ import com.xuyutech.hongbaoshu.data.Chapter
 import com.xuyutech.hongbaoshu.data.ParagraphType
 import kotlin.math.roundToInt
 
-data class ToolBarState(
-    val isVisible: Boolean = false,
-    val isInteracting: Boolean = false,
-    val lastInteractionTs: Long = 0L,
-    val autoHideMs: Long = 3000L
-)
-
 
 @Composable
-fun ReaderScreen(
-    viewModel: ReaderViewModel,
-    audioManager: AudioManager,
-    narrationControlsEnabled: Boolean = true,
+internal fun ReaderTopBar(
+    title: String,
+    chapterTitle: String,
     onBack: () -> Unit
 ) {
-    val state = viewModel.state.observeAsState(ReaderState())
-    val audioState = audioManager.state.collectAsState()
-
-    // Intercept system back (including edge-swipe) so it navigates back to bookshelf
-    // instead of finishing the Activity.
-    BackHandler(enabled = true) {
-        if (state.value.narrationEnabled) {
-            viewModel.pauseNarration()
-        }
-        onBack()
-    }
-
-    val showToc = remember { mutableStateOf(false) }
-    val showNarrationPanel = remember { mutableStateOf(false) }
-    val showFontSettings = remember { mutableStateOf(false) }
-    val toolbarState = remember { mutableStateOf(ToolBarState()) }
-    val suppressNextCenterTap = remember { mutableStateOf(false) }
-    val snackbarHostState = remember { SnackbarHostState() }
-    val uiScope = rememberCoroutineScope()
-    val textMeasurer = rememberTextMeasurer()
-    val density = LocalDensity.current
-    
-    // Tooltip State
-    val activeTooltipSentenceId = remember { mutableStateOf<String?>(null) }
-    // Clicked sentence for highlighting (same style as narration)
-    val clickedSentenceId = remember { mutableStateOf<String?>(null) }
-
-    // Manual tap signal for SwipeablePageContainer (from Text component)
-    val manualTapSignal = remember { kotlinx.coroutines.flow.MutableSharedFlow<androidx.compose.ui.geometry.Offset>(extraBufferCapacity = 1) }
-    
-    // Auto-dismiss tooltip after 3 seconds
-    LaunchedEffect(activeTooltipSentenceId.value) {
-        if (activeTooltipSentenceId.value != null) {
-            delay(3000)
-            activeTooltipSentenceId.value = null
-            clickedSentenceId.value = null
-        }
-    }
-
-    // 显示 Toast 消息
-    LaunchedEffect(state.value.toastMessage) {
-        state.value.toastMessage?.let { message ->
-            snackbarHostState.showSnackbar(message)
-            viewModel.clearToast()
-        }
-    }
-
-    val showNarrationUnsupported = {
-        // 提示用户该书籍不包含朗读音频
-        uiScope.launch {
-            snackbarHostState.showSnackbar("该书籍不包含朗读音频")
-        }
-        Unit
-    }
-
-    val updateToolbarInteraction = {
-        toolbarState.value = toolbarState.value.copy(
-            isVisible = true,
-            lastInteractionTs = System.currentTimeMillis()
-        )
-    }
-
-    val hideToolbar = {
-        toolbarState.value = toolbarState.value.copy(
-            isVisible = false,
-            isInteracting = false,
-            lastInteractionTs = System.currentTimeMillis()
-        )
-        showNarrationPanel.value = false
-        showFontSettings.value = false
-    }
-
-    val openNarrationPanel = {
-        toolbarState.value = toolbarState.value.copy(
-            isVisible = true,
-            isInteracting = true,
-            lastInteractionTs = System.currentTimeMillis()
-        )
-        showNarrationPanel.value = true
-        showFontSettings.value = false
-    }
-
-    val openFontSettings = {
-        toolbarState.value = toolbarState.value.copy(
-            isVisible = true,
-            isInteracting = true,
-            lastInteractionTs = System.currentTimeMillis()
-        )
-        showFontSettings.value = true
-        showNarrationPanel.value = false
-    }
-
-
-
-    LaunchedEffect(
-        toolbarState.value.isVisible,
-        toolbarState.value.lastInteractionTs,
-        toolbarState.value.isInteracting
-    ) {
-        val current = toolbarState.value
-        if (current.isVisible && !current.isInteracting) {
-            val token = current.lastInteractionTs
-            delay(current.autoHideMs)
-            val latest = toolbarState.value
-            if (latest.isVisible && !latest.isInteracting && latest.lastInteractionTs == token) {
-                toolbarState.value = latest.copy(isVisible = false)
+    TopAppBar(
+        title = {
+            Column {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    fontWeight = FontWeight.SemiBold
+                )
+                if (chapterTitle.isNotEmpty()) {
+                    Text(
+                        text = chapterTitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1
+                    )
+                }
             }
-        }
-    }
-
-
-
-    ReaderViewport(
-        state = state,
-        audioState = audioState,
-        viewModel = viewModel,
-        narrationControlsEnabled = narrationControlsEnabled,
-        toolbarState = toolbarState,
-        showNarrationPanel = showNarrationPanel,
-        showFontSettings = showFontSettings,
-        showToc = showToc,
-        activeTooltipSentenceId = activeTooltipSentenceId,
-        clickedSentenceId = clickedSentenceId,
-        suppressNextCenterTap = suppressNextCenterTap,
-        snackbarHostState = snackbarHostState,
-        manualTapSignal = manualTapSignal,
-        showNarrationUnsupported = showNarrationUnsupported,
-        updateToolbarInteraction = updateToolbarInteraction,
-        hideToolbar = hideToolbar,
-        openNarrationPanel = openNarrationPanel,
-        openFontSettings = openFontSettings,
-        onBack = onBack
+        },
+        navigationIcon = {
+            androidx.compose.material3.IconButton(onClick = onBack) {
+                androidx.compose.material3.Icon(
+                    imageVector = androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "返回"
+                )
+            }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+            titleContentColor = MaterialTheme.colorScheme.onSurface,
+            navigationIconContentColor = MaterialTheme.colorScheme.onSurface
+        ),
+        windowInsets = WindowInsets.statusBars
     )
 }
+
+@Composable
+internal fun ReaderBottomBar(
+    onOpenToc: () -> Unit,
+    onPlayPause: () -> Unit,
+    playPauseIcon: androidx.compose.ui.graphics.vector.ImageVector,
+    playPauseLabel: String,
+    onOpenNarrationPanel: () -> Unit,
+    onOpenFontSettings: () -> Unit,
+    isNightMode: Boolean,
+    onToggleNightMode: () -> Unit
+) {
+    NavigationBar(
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        tonalElevation = 6.dp
+    ) {
+        NavigationBarItem(
+            selected = false,
+            onClick = onOpenToc,
+            icon = {
+                androidx.compose.material3.Icon(
+                    imageVector = androidx.compose.material.icons.Icons.Default.Menu,
+                    contentDescription = "目录"
+                )
+            },
+            label = { Text("目录", style = MaterialTheme.typography.labelSmall) }
+        )
+        NavigationBarItem(
+            selected = false,
+            onClick = onPlayPause,
+            icon = { androidx.compose.material3.Icon(imageVector = playPauseIcon, contentDescription = playPauseLabel) },
+            label = { Text(playPauseLabel, style = MaterialTheme.typography.labelSmall) }
+        )
+        NavigationBarItem(
+            selected = false,
+            onClick = onOpenNarrationPanel,
+            icon = {
+                androidx.compose.material3.Icon(
+                    imageVector = androidx.compose.material.icons.Icons.Default.Info,
+                    contentDescription = "朗读"
+                )
+            },
+            label = { Text("朗读", style = MaterialTheme.typography.labelSmall) }
+        )
+        NavigationBarItem(
+            selected = false,
+            onClick = onOpenFontSettings,
+            icon = {
+                androidx.compose.material3.Icon(
+                    imageVector = androidx.compose.material.icons.Icons.Default.Settings,
+                    contentDescription = "字体"
+                )
+            },
+            label = { Text("字体", style = MaterialTheme.typography.labelSmall) }
+        )
+        NavigationBarItem(
+            selected = false,
+            onClick = onToggleNightMode,
+            icon = {
+                androidx.compose.material3.Icon(
+                    imageVector = if (isNightMode) {
+                        androidx.compose.material.icons.Icons.Filled.LightMode
+                    } else {
+                        androidx.compose.material.icons.Icons.Filled.DarkMode
+                    },
+                    contentDescription = if (isNightMode) "日间" else "夜间"
+                )
+            },
+            label = { Text(if (isNightMode) "日间" else "夜间", style = MaterialTheme.typography.labelSmall) }
+        )
+    }
+}
+
+@Composable
+internal fun BottomBarAction(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    onClick: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.clickable(onClick = onClick)
+    ) {
+        androidx.compose.material3.Icon(
+            imageVector = icon,
+            contentDescription = label,
+            modifier = Modifier.size(26.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+

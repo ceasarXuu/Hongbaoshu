@@ -113,152 +113,54 @@ import com.xuyutech.hongbaoshu.data.Chapter
 import com.xuyutech.hongbaoshu.data.ParagraphType
 import kotlin.math.roundToInt
 
-data class ToolBarState(
-    val isVisible: Boolean = false,
-    val isInteracting: Boolean = false,
-    val lastInteractionTs: Long = 0L,
-    val autoHideMs: Long = 3000L
+
+/**
+ * 根据页码索引获取页面数据（支持跨章节预览）
+ */
+internal fun getPageByIndex(
+    book: com.xuyutech.hongbaoshu.data.Book,
+    currentChapterIndex: Int,
+    currentPages: List<Page>,
+    prevChapterPages: List<Page>,
+    pageIndexToRender: Int,
+    nextPagesProvider: (String) -> List<Page>?
+): Pair<Chapter, Page>? {
+    return when {
+        // 上一章最后一页
+        pageIndexToRender < 0 && currentChapterIndex > 0 -> {
+            val prevChapter = book.chapters[currentChapterIndex - 1]
+            val page = prevChapterPages.lastOrNull() ?: return null
+            prevChapter to page
+        }
+        // 下一章第一页
+        currentPages.isNotEmpty() &&
+            pageIndexToRender >= currentPages.size &&
+            currentChapterIndex < book.chapters.lastIndex -> {
+            val nextChapter = book.chapters[currentChapterIndex + 1]
+            val nextPages = nextPagesProvider(nextChapter.id) ?: return null
+            val page = nextPages.firstOrNull() ?: return null
+            nextChapter to page
+        }
+        // 当前章节内
+        pageIndexToRender in currentPages.indices -> {
+            val chapter = book.chapters[currentChapterIndex]
+            val page = currentPages[pageIndexToRender]
+            chapter to page
+        }
+        else -> null
+    }
+}
+
+internal data class GlobalPaginationInfo(
+    val chapterStartPageById: Map<String, Int>,
+    val totalPages: Int
 )
 
-
-@Composable
-fun ReaderScreen(
-    viewModel: ReaderViewModel,
-    audioManager: AudioManager,
-    narrationControlsEnabled: Boolean = true,
-    onBack: () -> Unit
-) {
-    val state = viewModel.state.observeAsState(ReaderState())
-    val audioState = audioManager.state.collectAsState()
-
-    // Intercept system back (including edge-swipe) so it navigates back to bookshelf
-    // instead of finishing the Activity.
-    BackHandler(enabled = true) {
-        if (state.value.narrationEnabled) {
-            viewModel.pauseNarration()
-        }
-        onBack()
-    }
-
-    val showToc = remember { mutableStateOf(false) }
-    val showNarrationPanel = remember { mutableStateOf(false) }
-    val showFontSettings = remember { mutableStateOf(false) }
-    val toolbarState = remember { mutableStateOf(ToolBarState()) }
-    val suppressNextCenterTap = remember { mutableStateOf(false) }
-    val snackbarHostState = remember { SnackbarHostState() }
-    val uiScope = rememberCoroutineScope()
-    val textMeasurer = rememberTextMeasurer()
-    val density = LocalDensity.current
-    
-    // Tooltip State
-    val activeTooltipSentenceId = remember { mutableStateOf<String?>(null) }
-    // Clicked sentence for highlighting (same style as narration)
-    val clickedSentenceId = remember { mutableStateOf<String?>(null) }
-
-    // Manual tap signal for SwipeablePageContainer (from Text component)
-    val manualTapSignal = remember { kotlinx.coroutines.flow.MutableSharedFlow<androidx.compose.ui.geometry.Offset>(extraBufferCapacity = 1) }
-    
-    // Auto-dismiss tooltip after 3 seconds
-    LaunchedEffect(activeTooltipSentenceId.value) {
-        if (activeTooltipSentenceId.value != null) {
-            delay(3000)
-            activeTooltipSentenceId.value = null
-            clickedSentenceId.value = null
-        }
-    }
-
-    // 显示 Toast 消息
-    LaunchedEffect(state.value.toastMessage) {
-        state.value.toastMessage?.let { message ->
-            snackbarHostState.showSnackbar(message)
-            viewModel.clearToast()
-        }
-    }
-
-    val showNarrationUnsupported = {
-        // 提示用户该书籍不包含朗读音频
-        uiScope.launch {
-            snackbarHostState.showSnackbar("该书籍不包含朗读音频")
-        }
-        Unit
-    }
-
-    val updateToolbarInteraction = {
-        toolbarState.value = toolbarState.value.copy(
-            isVisible = true,
-            lastInteractionTs = System.currentTimeMillis()
-        )
-    }
-
-    val hideToolbar = {
-        toolbarState.value = toolbarState.value.copy(
-            isVisible = false,
-            isInteracting = false,
-            lastInteractionTs = System.currentTimeMillis()
-        )
-        showNarrationPanel.value = false
-        showFontSettings.value = false
-    }
-
-    val openNarrationPanel = {
-        toolbarState.value = toolbarState.value.copy(
-            isVisible = true,
-            isInteracting = true,
-            lastInteractionTs = System.currentTimeMillis()
-        )
-        showNarrationPanel.value = true
-        showFontSettings.value = false
-    }
-
-    val openFontSettings = {
-        toolbarState.value = toolbarState.value.copy(
-            isVisible = true,
-            isInteracting = true,
-            lastInteractionTs = System.currentTimeMillis()
-        )
-        showFontSettings.value = true
-        showNarrationPanel.value = false
-    }
-
-
-
-    LaunchedEffect(
-        toolbarState.value.isVisible,
-        toolbarState.value.lastInteractionTs,
-        toolbarState.value.isInteracting
-    ) {
-        val current = toolbarState.value
-        if (current.isVisible && !current.isInteracting) {
-            val token = current.lastInteractionTs
-            delay(current.autoHideMs)
-            val latest = toolbarState.value
-            if (latest.isVisible && !latest.isInteracting && latest.lastInteractionTs == token) {
-                toolbarState.value = latest.copy(isVisible = false)
-            }
-        }
-    }
-
-
-
-    ReaderViewport(
-        state = state,
-        audioState = audioState,
-        viewModel = viewModel,
-        narrationControlsEnabled = narrationControlsEnabled,
-        toolbarState = toolbarState,
-        showNarrationPanel = showNarrationPanel,
-        showFontSettings = showFontSettings,
-        showToc = showToc,
-        activeTooltipSentenceId = activeTooltipSentenceId,
-        clickedSentenceId = clickedSentenceId,
-        suppressNextCenterTap = suppressNextCenterTap,
-        snackbarHostState = snackbarHostState,
-        manualTapSignal = manualTapSignal,
-        showNarrationUnsupported = showNarrationUnsupported,
-        updateToolbarInteraction = updateToolbarInteraction,
-        hideToolbar = hideToolbar,
-        openNarrationPanel = openNarrationPanel,
-        openFontSettings = openFontSettings,
-        onBack = onBack
-    )
+internal fun buildPageIndicatorText(
+    globalPageIndex0: Int?,
+    globalTotalPages: Int?
+): String {
+    if (globalPageIndex0 == null || globalTotalPages == null) return ""
+    if (globalTotalPages <= 0 || globalPageIndex0 < 0) return ""
+    return "${globalPageIndex0 + 1}/$globalTotalPages"
 }

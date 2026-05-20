@@ -26,6 +26,15 @@ class ArchitectureGuardrailsTest {
         assertTrue("Use AppLogger instead of direct android.util.Log calls: $offenders", offenders.isEmpty())
     }
 
+    @Test
+    fun `production kotlin files stay under architecture line budget`() {
+        val offenders = kotlinFiles()
+            .map { it.relativeTo(mainSourceDir).path to it.readLines().size }
+            .filter { (_, lines) -> lines > 500 }
+
+        assertTrue("Keep production Kotlin files at 500 lines or less: $offenders", offenders.isEmpty())
+    }
+
     private fun kotlinFiles(): List<File> {
         return mainSourceDir.walkTopDown()
             .filter { it.isFile && it.extension == "kt" }

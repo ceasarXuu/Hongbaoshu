@@ -5,6 +5,7 @@ import androidx.compose.ui.text.TextMeasurer
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.xuyutech.hongbaoshu.audio.AudioManager
+import com.xuyutech.hongbaoshu.core.AppLogger
 import com.xuyutech.hongbaoshu.data.Chapter
 import com.xuyutech.hongbaoshu.data.ContentLoader
 import com.xuyutech.hongbaoshu.storage.ProgressStore
@@ -507,7 +508,7 @@ class ReaderViewModel(
     fun refresh() = load()
 
     private fun load() {
-        android.util.Log.i("ReaderViewModel", "load start: packId=$packId")
+        AppLogger.i("ReaderViewModel", "load start: packId=$packId")
         _state.value = ReaderState(isLoading = true)
         viewModelScope.launch {
             val result = runCatching {
@@ -518,7 +519,7 @@ class ReaderViewModel(
                 }
             }
             result.onSuccess { (bookResult, saved) ->
-                android.util.Log.i("ReaderViewModel", "load success: packId=$packId, title=${bookResult.book.title}, missingAudio=${bookResult.missingSentenceAudioIds.size}")
+                AppLogger.i("ReaderViewModel", "load success: packId=$packId, title=${bookResult.book.title}, missingAudio=${bookResult.missingSentenceAudioIds.size}")
                 val cappedChapterIndex =
                     saved.chapterIndex.coerceIn(0, bookResult.book.chapters.lastIndex)
                 _state.value = ReaderState(
@@ -532,7 +533,7 @@ class ReaderViewModel(
                 )
                 restoreAudioState(saved)
             }.onFailure { e ->
-                android.util.Log.e("ReaderViewModel", "load failed: packId=$packId", e)
+                AppLogger.e("ReaderViewModel", "load failed: packId=$packId", e)
                 _state.value = ReaderState(
                     isLoading = false,
                     error = e.message ?: "加载失败"

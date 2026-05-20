@@ -1,6 +1,8 @@
 package com.xuyutech.hongbaoshu.pack.importer
 
 import android.content.Context
+import com.xuyutech.hongbaoshu.core.AppLogger
+import com.xuyutech.hongbaoshu.core.SafeFileOps
 import com.xuyutech.hongbaoshu.data.ContentLoaderImpl
 import com.xuyutech.hongbaoshu.pack.index.PackIndexStore
 import com.xuyutech.hongbaoshu.pack.model.BookMetadata
@@ -22,6 +24,8 @@ class BuiltinMigrator(
     private val packIndexStore: PackIndexStore,
     private val packFileStore: PackFileStore
 ) {
+    private val safeFileOps = SafeFileOps(File(context.filesDir, "backups/builtin_migration"))
+
     suspend fun invoke(forceMigrate: Boolean = false) = withContext(Dispatchers.IO) {
         val packId = "builtin"
         val existing = packIndexStore.find(packId)
@@ -30,15 +34,15 @@ class BuiltinMigrator(
 
         // 若已迁移且有效，或者目录存在且清单存在，忽略（除非强制迁移）
         if (!forceMigrate && existing != null && targetDir.exists() && manifestFile.exists()) {
-            android.util.Log.d("BuiltinMigrator", "Migration skipped, already exists")
+            AppLogger.d("BuiltinMigrator", "Migration skipped, already exists")
             return@withContext
         }
 
-        android.util.Log.d("BuiltinMigrator", "Starting migration, force=$forceMigrate, targetDir=$targetDir")
+        AppLogger.d("BuiltinMigrator", "Starting migration, force=$forceMigrate, targetDir=$targetDir")
         
         // 清理旧数据（如果存在）
         if (targetDir.exists()) {
-            targetDir.deleteRecursively()
+            safeFileOps.moveToBackup(targetDir, "builtin_remigrate")
         }
         
         targetDir.mkdirs()
@@ -55,7 +59,7 @@ class BuiltinMigrator(
         val missingIds = bookResult.missingSentenceAudioIds.toList().sorted()
         val missingCount = missingIds.size
         if (missingIds.isNotEmpty()) {
-            android.util.Log.w(
+            AppLogger.w(
                 "BuiltinMigrator",
                 "Builtin narration missing ids(count=$missingCount): ${missingIds.joinToString(limit = 10)}"
             )
@@ -112,7 +116,7 @@ class BuiltinMigrator(
 
         if (list == null) {
             if (required) error("Required asset path missing: $srcPath")
-            android.util.Log.w("BuiltinMigrator", "Optional asset path missing: $srcPath")
+            AppLogger.w("BuiltinMigrator", "Optional asset path missing: $srcPath")
             return
         }
 
@@ -127,7 +131,7 @@ class BuiltinMigrator(
             }.isSuccess
             if (!copied) {
                 if (required) error("Required asset file missing: $srcPath")
-                android.util.Log.w("BuiltinMigrator", "Optional asset file missing: $srcPath")
+                AppLogger.w("BuiltinMigrator", "Optional asset file missing: $srcPath")
             }
         } else {
             destDir.mkdirs()

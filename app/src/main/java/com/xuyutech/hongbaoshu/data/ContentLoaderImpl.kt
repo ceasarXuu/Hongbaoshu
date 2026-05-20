@@ -2,6 +2,7 @@ package com.xuyutech.hongbaoshu.data
 
 import android.content.Context
 import android.net.Uri
+import com.xuyutech.hongbaoshu.core.AppLogger
 import java.io.IOException
 import kotlinx.serialization.json.Json
 
@@ -35,7 +36,7 @@ class ContentLoaderImpl : ContentLoader {
 
     override fun narrationUri(sentenceId: String): Uri? {
         val uri = narrationMap[sentenceId]
-        android.util.Log.d("ContentLoader", "narrationUri: id=$sentenceId, uri=$uri, mapSize=${narrationMap.size}")
+        AppLogger.d("ContentLoader", "narrationUri: id=$sentenceId, uri=$uri, mapSize=${narrationMap.size}")
         return uri
     }
 

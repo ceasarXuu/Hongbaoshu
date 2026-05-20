@@ -9,6 +9,8 @@ import com.xuyutech.hongbaoshu.data.ContentLoaderImpl
 import com.xuyutech.hongbaoshu.pack.loader.FilePackContentLoader
 import com.xuyutech.hongbaoshu.pack.index.PackIndexStore
 import com.xuyutech.hongbaoshu.pack.importer.ZipPackImporter
+import com.xuyutech.hongbaoshu.pack.repository.AndroidPackRepository
+import com.xuyutech.hongbaoshu.pack.repository.PackRepository
 import com.xuyutech.hongbaoshu.pack.storage.PackFileStore
 import com.xuyutech.hongbaoshu.storage.PageCacheStore
 import com.xuyutech.hongbaoshu.storage.ProgressStore
@@ -43,6 +45,10 @@ object ServiceLocator {
     @android.annotation.SuppressLint("StaticFieldLeak") // Holds ApplicationContext, safe
     @Volatile
     private var packImporter: ZipPackImporter? = null
+
+    @android.annotation.SuppressLint("StaticFieldLeak") // Holds ApplicationContext through stores, safe
+    @Volatile
+    private var packRepository: PackRepository? = null
 
     fun provideActivePackContentLoader(context: Context): ActivePackContentLoader =
         activePackLoader ?: synchronized(this) {
@@ -92,6 +98,15 @@ object ServiceLocator {
             ).also { packImporter = it }
         }
 
+    fun providePackRepository(context: Context): PackRepository =
+        packRepository ?: synchronized(this) {
+            packRepository ?: AndroidPackRepository(
+                packIndexStore = providePackIndexStore(context),
+                packFileStore = providePackFileStore(context),
+                packImporter = providePackImporter(context)
+            ).also { packRepository = it }
+        }
+
     @Volatile
     private var builtinMigrator: com.xuyutech.hongbaoshu.pack.importer.BuiltinMigrator? = null
 
@@ -113,5 +128,7 @@ object ServiceLocator {
         packIndexStore = null
         packFileStore = null
         packImporter = null
+        packRepository = null
+        builtinMigrator = null
     }
 }

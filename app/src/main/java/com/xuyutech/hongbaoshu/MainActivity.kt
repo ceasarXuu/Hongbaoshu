@@ -28,20 +28,18 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.xuyutech.hongbaoshu.bookshelf.BookshelfBook
 import com.xuyutech.hongbaoshu.bookshelf.BookshelfScreen
 import com.xuyutech.hongbaoshu.bookshelf.BookshelfViewModel
-import com.xuyutech.hongbaoshu.bookshelf.BookshelfViewModelFactory
 import com.xuyutech.hongbaoshu.bookshelf.ImportProgressDialog
 import com.xuyutech.hongbaoshu.bookshelf.ImportState
 import com.xuyutech.hongbaoshu.audio.AudioManager
+import com.xuyutech.hongbaoshu.core.AppLogger
 import com.xuyutech.hongbaoshu.di.ServiceLocator
+import com.xuyutech.hongbaoshu.pack.repository.PackRepository
 import com.xuyutech.hongbaoshu.reader.ReaderViewModel
 import com.xuyutech.hongbaoshu.reader.ReaderViewModelFactory
 import com.xuyutech.hongbaoshu.reader.ReaderScreen
 import com.xuyutech.hongbaoshu.ui.theme.HongbaoshuTheme
 import com.xuyutech.hongbaoshu.storage.ProgressStore
-import com.xuyutech.hongbaoshu.pack.model.PackIndex
-import com.xuyutech.hongbaoshu.pack.storage.PackInspector
 import kotlinx.coroutines.launch
-import java.io.File
 
 class MainActivity : ComponentActivity() {
     private var pendingExternalImportUri by mutableStateOf<Uri?>(null)
@@ -72,7 +70,7 @@ class MainActivity : ComponentActivity() {
             Configuration.ORIENTATION_PORTRAIT -> "portrait"
             else -> "undefined"
         }
-        android.util.Log.i("MainActivity", "onConfigurationChanged orientation=$orientation")
+        AppLogger.i("MainActivity", "onConfigurationChanged orientation=$orientation")
     }
 
     private fun extractImportUri(intent: Intent?): Uri? {
@@ -98,15 +96,13 @@ private fun HongbaoshuApp(
     var audioManager: AudioManager? = null
     var progressStore: ProgressStore? = null
     var pageCacheStore: com.xuyutech.hongbaoshu.storage.PageCacheStore? = null
-    var packIndexStore: com.xuyutech.hongbaoshu.pack.index.PackIndexStore? = null
-    var packFileStore: com.xuyutech.hongbaoshu.pack.storage.PackFileStore? = null
-    var packImporter: com.xuyutech.hongbaoshu.pack.importer.ZipPackImporter? = null
+    var packRepository: PackRepository? = null
     var activePackLoader: com.xuyutech.hongbaoshu.data.ActivePackContentLoader? = null
 
     try {
         audioManager = ServiceLocator.provideAudioManager(context)
     } catch (e: Exception) {
-        android.util.Log.e("MainActivity", "Failed to create AudioManager", e)
+        AppLogger.e("MainActivity", "Failed to create AudioManager", e)
         initError = "音频管理器初始化失败: ${e.message}"
     }
 
@@ -114,7 +110,7 @@ private fun HongbaoshuApp(
         try {
             progressStore = ServiceLocator.provideProgressStore(context)
         } catch (e: Exception) {
-            android.util.Log.e("MainActivity", "Failed to create ProgressStore", e)
+            AppLogger.e("MainActivity", "Failed to create ProgressStore", e)
             initError = "进度存储初始化失败: ${e.message}"
         }
     }
@@ -123,35 +119,17 @@ private fun HongbaoshuApp(
         try {
             pageCacheStore = ServiceLocator.providePageCacheStore(context)
         } catch (e: Exception) {
-            android.util.Log.e("MainActivity", "Failed to create PageCacheStore", e)
+            AppLogger.e("MainActivity", "Failed to create PageCacheStore", e)
             initError = "页面缓存初始化失败: ${e.message}"
         }
     }
 
     if (initError == null) {
         try {
-            packIndexStore = ServiceLocator.providePackIndexStore(context)
+            packRepository = ServiceLocator.providePackRepository(context)
         } catch (e: Exception) {
-            android.util.Log.e("MainActivity", "Failed to create PackIndexStore", e)
-            initError = "包索引存储初始化失败: ${e.message}"
-        }
-    }
-
-    if (initError == null) {
-        try {
-            packFileStore = ServiceLocator.providePackFileStore(context)
-        } catch (e: Exception) {
-            android.util.Log.e("MainActivity", "Failed to create PackFileStore", e)
-            initError = "包文件存储初始化失败: ${e.message}"
-        }
-    }
-
-    if (initError == null) {
-        try {
-            packImporter = ServiceLocator.providePackImporter(context)
-        } catch (e: Exception) {
-            android.util.Log.e("MainActivity", "Failed to create PackImporter", e)
-            initError = "包导入器初始化失败: ${e.message}"
+            AppLogger.e("MainActivity", "Failed to create PackRepository", e)
+            initError = "资源仓储初始化失败: ${e.message}"
         }
     }
 
@@ -159,14 +137,13 @@ private fun HongbaoshuApp(
         try {
             activePackLoader = ServiceLocator.provideActivePackContentLoader(context)
         } catch (e: Exception) {
-            android.util.Log.e("MainActivity", "Failed to create ActivePackContentLoader", e)
+            AppLogger.e("MainActivity", "Failed to create ActivePackContentLoader", e)
             initError = "内容加载器初始化失败: ${e.message}"
         }
     }
 
     if (initError != null || audioManager == null || progressStore == null || 
-        pageCacheStore == null || packIndexStore == null || packFileStore == null || 
-        packImporter == null || activePackLoader == null) {
+        pageCacheStore == null || packRepository == null || activePackLoader == null) {
         if (initError == null) {
             initError = "部分组件初始化失败，请重启应用"
         }
@@ -182,9 +159,7 @@ private fun HongbaoshuApp(
     val am = audioManager!!
     val ps = progressStore!!
     val pcs = pageCacheStore!!
-    val pis = packIndexStore!!
-    val pfs = packFileStore!!
-    val pim = packImporter!!
+    val repo = packRepository!!
     val apl = activePackLoader!!
 
     val activePackId = remember { mutableStateOf("builtin") }
@@ -201,10 +176,10 @@ private fun HongbaoshuApp(
         try {
             builtinMigrator.invoke(forceMigrate = true)
         } catch (e: Exception) {
-            android.util.Log.e("MainActivity", "BuiltinMigrator failed", e)
+            AppLogger.e("MainActivity", "BuiltinMigrator failed", e)
         }
         // 迁移完成后创建 bookshelfViewModel
-        bookshelfViewModel = BookshelfViewModel(pis)
+        bookshelfViewModel = BookshelfViewModel(repo)
         builtinMigrated = true
     }
 
@@ -251,7 +226,7 @@ private fun HongbaoshuApp(
                     Intent.FLAG_GRANT_READ_URI_PERMISSION
                 )
             }
-            val result = pim.import(targetUri)
+            val result = repo.import(targetUri)
             if (result.status == com.xuyutech.hongbaoshu.pack.importer.PackImportResult.Status.SUCCESS || 
                 result.status == com.xuyutech.hongbaoshu.pack.importer.PackImportResult.Status.SKIPPED) {
                 importState = ImportState.Idle
@@ -294,15 +269,12 @@ private fun HongbaoshuApp(
             screen = screen.value,
             isLoading = isLoading,
             books = packs.value.map { p ->
-                val coverUri = PackInspector.resolveCoverPath(pfs.packDir(p.packId))
-                    ?.toURI()
-                    ?.toString()
                 BookshelfBook(
                     packId = p.packId,
                     title = p.bookTitle,
                     author = p.bookAuthor,
                     edition = p.bookEdition,
-                    coverUri = coverUri,
+                    coverUri = repo.coverUri(p.packId),
                     statusText = when {
                         !p.isValid -> "不可用"
                         !p.hasNarration -> "仅文本"
@@ -312,32 +284,18 @@ private fun HongbaoshuApp(
                 )
             },
             onOpenBook = { selected ->
-                scope.launch { pis.markOpened(selected.packId) }
+                scope.launch { repo.markOpened(selected.packId) }
                 activePackId.value = selected.packId
                 screen.value = Screen.Reader
             },
             onDeletePack = { target ->
                 scope.launch {
-                    pis.delete(target.packId)
-                    pfs.deletePack(target.packId)
+                    repo.delete(target.packId)
                 }
             },
             onRevalidatePack = { target ->
                 scope.launch {
-                    val existing = pis.find(target.packId) ?: return@launch
-                    val inspection = pfs.inspect(target.packId)
-                    val missingNarrationSentenceCount =
-                        PackInspector.inspectMissingNarrationSentenceCount(pfs.packDir(target.packId))
-                            ?: existing.missingNarrationSentenceCount
-                    pis.upsert(
-                        existing.copy(
-                            hasCover = inspection.hasCover,
-                            hasFlipSound = inspection.hasFlipSound,
-                            hasNarration = inspection.hasNarration,
-                            missingNarrationSentenceCount = missingNarrationSentenceCount,
-                            isValid = inspection.isValid
-                        )
-                    )
+                    repo.revalidate(target.packId)
                 }
             },
             onBackToBookshelf = {

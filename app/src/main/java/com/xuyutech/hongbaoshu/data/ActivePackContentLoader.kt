@@ -2,6 +2,7 @@ package com.xuyutech.hongbaoshu.data
 
 import android.content.Context
 import android.net.Uri
+import com.xuyutech.hongbaoshu.core.AppLogger
 
 class ActivePackContentLoader(
     private val builtinLoader: ContentLoader,
@@ -12,7 +13,7 @@ class ActivePackContentLoader(
 
     fun setActivePackId(packId: String) {
         activePackId = packId
-        android.util.Log.d("ActivePackContentLoader", "activePackId=$packId")
+        AppLogger.d("ActivePackContentLoader", "activePackId=$packId")
     }
 
     fun currentPackId(): String = activePackId
@@ -29,7 +30,7 @@ class ActivePackContentLoader(
 
     private fun currentLoader(): ContentLoader {
         val loader = loaderFor(activePackId)
-        android.util.Log.d("ActivePackContentLoader", "currentLoader packId=$activePackId loader=${loader.javaClass.simpleName}")
+        AppLogger.d("ActivePackContentLoader", "currentLoader packId=$activePackId loader=${loader.javaClass.simpleName}")
         return loader
     }
 

@@ -210,7 +210,7 @@ class AudioManagerImpl(
                     .setMediaMetadata(
                         MediaMetadata.Builder()
                             .setTitle("朗读")
-                            .setArtist("红宝书")
+                            .setArtist("红宝匣")
                             .build()
                     )
                     .build()

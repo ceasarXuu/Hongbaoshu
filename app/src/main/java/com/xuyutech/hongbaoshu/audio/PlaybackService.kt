@@ -112,7 +112,7 @@ class PlaybackService : MediaSessionService() {
         val isNarration = audioManager.state.value.narrationSentenceId != null
         val contentText = if (isNarration) "朗读中" else "播放中"
         return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
-            .setContentTitle("红宝书")
+            .setContentTitle("红宝匣")
             .setContentText(contentText)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentIntent(sessionActivity)

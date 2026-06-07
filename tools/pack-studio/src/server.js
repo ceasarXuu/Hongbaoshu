@@ -117,6 +117,11 @@ app.use((error, _req, res, _next) => {
   res.status(500).json({ error: error.message });
 });
 
+// SPA fallback: non-API, non-file requests serve index.html
+app.get("/{*splat}", (_req, res) => {
+  res.sendFile(path.join(staticDir, "index.html"));
+});
+
 app.listen(port, () => {
   console.log(`Pack Studio listening on http://localhost:${port}`);
 });

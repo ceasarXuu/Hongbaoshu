@@ -29,3 +29,5 @@ service-account.json
 /audio_backup_raw
 /tools/pack-studio/node_modules
 /tools/pack-studio/workspace
+/tools/pack-studio/web/node_modules
+/tools/pack-studio/src/static/assets
